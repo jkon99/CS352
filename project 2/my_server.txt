@@ -1,0 +1,70 @@
+#feel free to add functions to this part of the project, just make sure that the get_dns_response function works
+from resolver_background import DnsResolver
+import threading
+import socket
+import struct
+import argparse
+from sys import argv
+from time import sleep
+from helper_funcs import DNSQuery
+class MyResolver(DnsResolver):
+	def __init__(self, port):
+		self.port = port
+		#define variables and locks you will need here
+		self.nameserver = ["198.41.0.4", "199.9.14.201"]
+		self.cache_lock = threading.Lock()
+	def get_dns_response(self, query):
+		#input: A query and any state in self
+		#returns: the correct response to the query obtained by asking DNS name servers
+		#Your code goes here, when you change any 'self' variables make sure to use a lock
+		q = DNSQuery(query)
+
+		s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+		q.header['RD'] = 0
+		ip = self.nameserver[0]
+		while(1):
+			s.sendto(q.to_bytes(), (ip , 53) )
+			val = s.recv(1024)
+			w = DNSQuery(val)
+			print(w.answers)
+			i =1
+			if(w.answers[0]['TYPE'] == 2):
+				while(w.answers[i]['TYPE'] != 1):
+					i = i + 1
+			ip = (w.answers[i]['RDATA'][0])
+			print(ip)
+			s.sendto(q.to_bytes(), (ip , 53) )
+			val = s.recv(1024)
+			w = DNSQuery(val)
+			print(w.answers)
+			break
+
+		a = DNSQuery()
+		a.header['ID'] = q.header['ID']
+		a.header['QR'] = 1
+		a.header['OPCODE'] = q.header['OPCODE']
+		a.header['AA'] = 1
+		a.header['TC'] = 0
+		a.header['RD'] = q.header['RD']
+		a.header ['RA'] = 0
+		a.header['RCODE'] = 0 
+		a.header ['QDCOUNT'] = q.header['QDCOUNT']
+		a.header ['ANCOUNT'] = len(w.answers)
+		a.header ['NSCOUNT'] = 0
+		a.header ['ARCOUNT'] = 0
+		a.question = q.question
+		a.answers = w.answers
+		print("here")
+		print(q.question)
+
+		a.question = q.question
+		print("hello")
+		print(a)
+		return a.to_bytes()
+parser = argparse.ArgumentParser(description="""This is a DNS resolver""")
+parser.add_argument('port', type=int, help='This is the port to connect to the resolver on',action='store')
+args = parser.parse_args(argv[1:])
+resolver = MyResolver(args.port)
+
+print("Starting...")
+resolver.wait_for_requests()
